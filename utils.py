@@ -85,3 +85,9 @@ def infer_column_dtype(column, datetime_threshold=0.9):
 
     # Default to categorical if other conversions fail
     return "categorical"
+
+
+def default_converter(o):
+    if isinstance(o, np.float32):
+        return float(o)
+    raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")

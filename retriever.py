@@ -97,7 +97,9 @@ class ColumnRetriever:
         self, source_table, target_table, source_values, target_values, top_k
     ):
         if "arctic" in self.model_type:
-            return self._match_columns_arctic(source_table, target_table, top_k)
+            return self._match_columns_arctic(
+                source_table, target_table, source_values, target_values, top_k
+            )
         else:
             source_embeddings = self.encode_columns(source_table, source_values)
             target_embeddings = self.encode_columns(target_table, target_values)
@@ -121,10 +123,12 @@ class ColumnRetriever:
         sim = np.dot(vec1, vec2.T) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
         return sim[0][0]
 
-    def _match_columns_arctic(self, source_table, target_table, top_k):
+    def _match_columns_arctic(
+        self, source_table, target_table, source_values, target_values, top_k
+    ):
         queries = []
         for col in source_table.columns:
-            queries.append(self._tokenize(col, source_table[col]))
+            queries.append(self._tokenize(col, source_table[col], source_values[col]))
         queries_with_prefix = [f"{QUERY_PREFIX}{q}" for q in queries]
         query_tokens = self._tokenizer(
             queries_with_prefix,
@@ -132,18 +136,18 @@ class ColumnRetriever:
             truncation=True,
             return_tensors="pt",
             max_length=512,
-        )
+        ).to(self.device)
 
         documents = []
         for col in target_table.columns:
-            documents.append(self._tokenize(col, target_table[col]))
+            documents.append(self._tokenize(col, target_table[col], target_values[col]))
         document_tokens = self._tokenizer(
             documents,
             padding=True,
             truncation=True,
             return_tensors="pt",
             max_length=512,
-        )
+        ).to(self.device)
 
         with torch.inference_mode():
             query_embeddings = self._model(**query_tokens)[0][:, 0]

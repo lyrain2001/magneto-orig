@@ -2,10 +2,11 @@ import argparse
 import pandas as pd
 import os
 import time
+import json
 
 from retriever import ColumnRetriever
 from matcher import ColumnMatcher
-from utils import get_dataset_paths, process_tables, get_samples
+from utils import get_dataset_paths, process_tables, get_samples, default_converter
 from evaluation import evaluate_matches, convert_to_valentine_format
 
 API_KEY = "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"
@@ -37,7 +38,15 @@ class RetrieveMatch:
         print("Matched Columns:", matched_columns)
 
         if cand_k > 1:
-            matched_columns = self.matcher.rematch(source_table, matched_columns, top_k)
+            matched_columns = self.matcher.rematch(
+                source_table,
+                target_table,
+                source_values,
+                target_values,
+                top_k,
+                matched_columns,
+                cand_k,
+            )
             print("Refined Matches:", matched_columns)
         runtime = time.time() - start_time
 
@@ -46,12 +55,16 @@ class RetrieveMatch:
             source_path.replace(".csv", ""),
             target_path.replace(".csv", ""),
         )
-        return converted_matches, runtime
+        return converted_matches, runtime, matched_columns
 
 
 def run_retrieve_match(args):
     source_tables_path, target_tables_path, gt_path = get_dataset_paths(args.dataset)
     rema = RetrieveMatch(args.model_type, args.dataset, args.serialization)
+
+    target_dir = f"{args.dataset}/{args.model_type}_{args.serialization}_{args.top_k}_{args.cand_k}"
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir)
 
     gt_df = pd.read_csv(gt_path)
     columns = [
@@ -75,7 +88,7 @@ def run_retrieve_match(args):
     if args.dataset not in ["gdc"]:
         results = []
         for source_path in os.listdir(source_tables_path):
-            matches, runtime = rema.match(
+            matches, runtime, orig_matches = rema.match(
                 source_tables_path,
                 target_tables_path,
                 source_path,
@@ -90,6 +103,7 @@ def run_retrieve_match(args):
             print("Ground Truth:", ground_truth)
             metrics = evaluate_matches(matches, ground_truth)
             print("Metrics:", metrics)
+            exit()
 
             metrics.update(
                 {
@@ -102,15 +116,18 @@ def run_retrieve_match(args):
 
             results.append(metrics)
 
-        all_metrics = pd.DataFrame(results, columns=columns, index=None)
-        print("All Metrics:", all_metrics)
+            matches_filename = f"{target_dir}/{source_path.split('.')[0]}_matches.json"
+            with open(matches_filename, "w") as f:
+                json.dump(orig_matches, f, indent=4, default=default_converter)
 
+        all_metrics = pd.DataFrame(results, columns=columns, index=None)
         avg_metrics = all_metrics.mean(numeric_only=True)
         print("Average Metrics:", avg_metrics)
 
-        # Save to CSV
-        filename = f"{args.dataset}_{args.model_type}_{args.serialization}_{args.top_k}_{args.cand_k}.csv"
-        all_metrics.to_csv(filename)
+        mertics_filename = f"{target_dir}/metrics.csv"
+        all_metrics.to_csv(mertics_filename, index=False)
+        avg_metrics_filename = f"{target_dir}/avg_metrics.csv"
+        avg_metrics.to_frame().T.to_csv(avg_metrics_filename, mode="a", index=False)
 
 
 def main():
@@ -129,7 +146,7 @@ def main():
     )
     parser.add_argument(
         "--serialization",
-        default="header_values",
+        default="header_values_prefix",
         help="Column serialization method (header, header_values_default, header_values_prefix, header_values_repeat)",
     )
     parser.add_argument(
