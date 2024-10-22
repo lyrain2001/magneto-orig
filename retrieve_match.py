@@ -184,7 +184,10 @@ def main():
         "--top_k", type=int, default=20, help="Number of top matches to return"
     )
     parser.add_argument(
-        "--cand_k", type=int, default=20, help="Number of candidate matches to refine",
+        "--cand_k",
+        type=int,
+        default=20,
+        help="Number of candidate matches to refine",
     )
     parser.add_argument(
         "--llm_model",

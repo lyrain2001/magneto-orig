@@ -26,7 +26,8 @@ class PretrainTableDataset(data.Dataset):
     """Table dataset for pre-training"""
 
     def __init__(
-        self, hp,
+        self,
+        hp,
     ):
         self.tokenizer = AutoTokenizer.from_pretrained(lm_map[hp.lm])
         self.max_len = hp.max_len

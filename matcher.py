@@ -11,10 +11,12 @@ class ColumnMatcher:
         self.client = self._load_client()
 
     def _load_client(self):
-        if self.llm_model == "gpt-4-turbo-preview":
-            self.client = OpenAI(api_key=API_KEY)
-        elif self.llm_model == "gemma2:9b":
-            self.client = ollama.Client(host=OLLAMA_HOST)
+        if self.llm_model in ["gpt-4-turbo-preview", "gpt-4o-mini"]:
+            print("Loading OpenAI client")
+            return OpenAI(api_key=API_KEY)
+        elif self.llm_model in ["gemma2:9b"]:
+            print("Loading OLLAMA client")
+            return ollama.Client(host=OLLAMA_HOST)
 
     def num_tokens_from_string(self, string, encoding_name="gpt-4-turbo-preview"):
         encoding = tiktoken.encoding_for_model(encoding_name)
@@ -67,7 +69,7 @@ class ColumnMatcher:
             "From a score of 0.00 to 1.00, please judge the similarity of the candidate column from the candidate table to each target schema in the target table. \
 All the columns are defined by the column name and a sample of its respective values if available. \
 Provide only the name of each target schema followed by its similarity score in parentheses, formatted to two decimals, and separated by a semicolon. \
-Rank the schema-score pairs by score in descending order. \n \
+Rank the schema-score pairs by score in descending order. Ensure your response excludes additional information and quotations.\n \
 Example:\n \
 Candidate Column: \
 Column: EmployeeID, Sample values: [100, 101, 102]\n \
@@ -85,27 +87,41 @@ Candidate Column:"
         return prompt
 
     def _get_matches_w_score(
-        self, cand, targets, other_cols,
+        self,
+        cand,
+        targets,
+        other_cols,
     ):
         prompt = self._get_prompt(cand, targets)
-
-        if self.llm_model == "gpt-4-turbo-preview":
+        # print(prompt)
+        if self.llm_model in ["gpt-4-turbo-preview", "gpt-4o-mini"]:
             messages = [
                 {
                     "role": "system",
                     "content": "You are an AI trained to perform schema matching by providing similarity scores.",
                 },
-                {"role": "user", "content": prompt,},
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
             ]
             # print(messages[1]["content"])
             response = self.client.chat.completions.create(
-                model=self.llm_model, messages=messages, temperature=0.3,
+                model=self.llm_model,
+                messages=messages,
+                temperature=0.3,
             )
             matches = response.choices[0].message.content
 
-        elif self.llm_model == "gemma2:9b":
+        elif self.llm_model in ["gemma2:9b"]:
             response = self.client.chat(
-                model="gemma2:9b", messages=[{"role": "user", "content": prompt,},]
+                model=self.llm_model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    },
+                ],
             )
             matches = response["message"]["content"]
         print(matches)

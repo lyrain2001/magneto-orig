@@ -25,7 +25,9 @@ if __name__ == "__main__":
     parser.add_argument("--top_k", type=int, default=50)
 
     parser.add_argument(
-        "--dataset", default="chembl", help="Name of the dataset (without usecase)",
+        "--dataset",
+        default="chembl",
+        help="Name of the dataset (without usecase)",
     )
     parser.add_argument(
         "--model_type",

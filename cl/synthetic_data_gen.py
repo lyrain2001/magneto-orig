@@ -45,10 +45,15 @@ Ensure your response excludes additional information and quotations."
                 "role": "system",
                 "content": "You are an AI trained to perform schema matching by providing similarity scores.",
             },
-            {"role": "user", "content": prompt,},
+            {
+                "role": "user",
+                "content": prompt,
+            },
         ]
         response = self.client.chat.completions.create(
-            model=model, messages=messages, temperature=0.3,
+            model=model,
+            messages=messages,
+            temperature=0.3,
         )
         matches_content = response.choices[0].message.content
         matches = matches_content.split("; ")
@@ -118,7 +123,9 @@ def main():
         description="Match columns between source and target tables using pretrained models."
     )
     parser.add_argument(
-        "--dataset", default="chembl", help="Name of the dataset",
+        "--dataset",
+        default="chembl",
+        help="Name of the dataset",
     )
     args = parser.parse_args()
     dataset = args.dataset
