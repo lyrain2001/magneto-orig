@@ -18,11 +18,25 @@ if __name__ == "__main__":
     parser.add_argument("--n_epochs", type=int, default=20)
     parser.add_argument("--lm", type=str, default="roberta")
     parser.add_argument("--projector", type=int, default=768)
-    parser.add_argument("--augment_op", type=str, default="semantic,sample_row")
+    parser.add_argument("--augment_op", type=str, default="semantic,exact")
     parser.add_argument("--save_model", dest="save_model", action="store_true")
     parser.add_argument("--fp16", dest="fp16", action="store_true")
     parser.add_argument("--sample_meth", type=str, default="random")
     parser.add_argument("--top_k", type=int, default=50)
+
+    parser.add_argument(
+        "--dataset", default="chembl", help="Name of the dataset (without usecase)",
+    )
+    parser.add_argument(
+        "--model_type",
+        default="roberta-zs",
+        help="Type of model (roberta-zs, roberta-ft, mpnet-zs, mpnet-ft, arctic-zs, arctic-ft)",
+    )
+    parser.add_argument(
+        "--serialization",
+        default="header_values_prefix",
+        help="Column serialization method (header, header_values_default, header_values_prefix, header_values_repeat)",
+    )
 
     args = parser.parse_args()
 

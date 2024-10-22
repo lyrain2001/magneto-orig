@@ -4,20 +4,20 @@ import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 import sklearn.metrics as metrics
-import mlflow
 import pandas as pd
 import os
+import sys
 import json
 
-from utils import evaluate_column_matching, evaluate_clustering
 from model import BarlowTwinsSimCLR
 from dataset import PretrainTableDataset
+from loss import batch_all_triplet_loss
+
 
 from tqdm import tqdm
 from torch.utils import data
 from transformers import AdamW, get_linear_schedule_with_warmup
 from typing import List
-from sklearn.metrics.pairwise import cosine_similarity
 
 
 def train_step(train_iter, model, optimizer, scheduler, scaler, hp):
@@ -68,7 +68,6 @@ def train(trainset, hp):
     """
     print("Start training")
     padder = trainset.pad
-    # create the DataLoaders
     train_iter = data.DataLoader(
         dataset=trainset,
         batch_size=hp.batch_size,
@@ -77,7 +76,6 @@ def train(trainset, hp):
         collate_fn=padder,
     )
 
-    # ----------------------------------------------------------------
     # initialize model, optimizer, and LR scheduler
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = BarlowTwinsSimCLR(hp, device=device, lm=hp.lm)
@@ -100,52 +98,6 @@ def train(trainset, hp):
         train_step(train_iter, model, optimizer, scheduler, scaler, hp)
         print("epoch %d: " % epoch + "training done")
 
-        # save the last checkpoint
-        # ---------------------------TODO: integrate-------------------------------------
-        # if hp.save_model and epoch == hp.n_epochs:
-        #     directory = os.path.join(hp.logdir, hp.task)
-        #     if not os.path.exists(directory):
-        #         os.makedirs(directory)
-
-        #     # save the checkpoints for each component
-        #     if hp.single_column:
-        #         ckpt_path = os.path.join(hp.logdir, hp.task, 'model_'+str(hp.augment_op)+'_'+str(hp.sample_meth)+'_'+str(hp.table_order)+'_'+str(hp.run_id)+'singleCol.pt')
-        #     else:
-        #         ckpt_path = os.path.join(hp.logdir, hp.task, 'model_'+str(hp.augment_op)+'_'+str(hp.sample_meth)+'_'+str(hp.table_order)+'_'+str(hp.run_id)+'.pt')
-
-        #     ckpt = {'model': model.state_dict(),
-        #             'hp': hp}
-        #     torch.save(ckpt, ckpt_path)
-        # -------------------------------------------------------------------------------
-
-        # test loading checkpoints
-        # load_checkpoint(ckpt_path)
-        # intrinsic evaluation with column matching
-        if hp.task in ["small", "large"]:
-            # Train column matching models using the learned representations
-            metrics_dict = evaluate_pretrain(model, trainset)
-
-            # log metrics
-            mlflow.log_metrics(metrics_dict)
-
-            print(
-                "epoch %d: " % epoch
-                + ", ".join(["%s=%f" % (k, v) for k, v in metrics_dict.items()])
-            )
-
-        # evaluate on column clustering
-        if hp.task in ["viznet"]:
-            # Train column matching models using the learned representations
-            metrics_dict = evaluate_column_clustering(model, trainset)
-
-            # log metrics
-            mlflow.log_metrics(metrics_dict)
-            print(
-                "epoch %d: " % epoch
-                + ", ".join(["%s=%f" % (k, v) for k, v in metrics_dict.items()])
-            )
-
-        # ----------------------------------------------------------------
         if hp.task in ["arpa"]:
             # Train column matching models using the learned representations
             # store_embeddings = True if epoch == hp.n_epochs else False
@@ -175,11 +127,6 @@ def train(trainset, hp):
 
             print("epoch %d: " % epoch + "precision=%f" % precision)
             print("Best precision so far: ", best_precision)
-
-            # log metrics
-            # mlflow.log_metrics(metrics_dict)
-            # print("epoch %d: " % epoch + ", ".join(["%s=%f" % (k, v) \
-            #                         for k, v in metrics_dict.items()]))
 
 
 def inference_on_tables(
@@ -262,156 +209,3 @@ def load_checkpoint(ckpt):
     dataset = PretrainTableDataset.from_hp(ds_path, hp)
 
     return model, dataset
-
-
-# def test(trainset, hp):
-#     model_path = os.path.join(hp.logdir, hp.task, f"model_{hp.top_k}_0.pt")
-#     ckpt = torch.load(model_path)
-#     print(f"Loaded model from {model_path}")
-#     model = load_checkpoint(ckpt, hp)
-
-#     table_path = 'data'
-#     k = hp.top_k
-
-
-# ----------------------------- Evaluation for ARPA dataset ----------------------------------
-def evaluate_arpa_matching(
-    model: BarlowTwinsSimCLR, unlabeled: PretrainTableDataset, best_precision, hp
-):
-    """Evaluate pre-trained model on a column matching dataset.
-
-    Args:
-        model (BarlowTwinsSimCLR): the model to be evaluated
-        unlabeled (PretrainTableDataset): the unlabeled dataset
-
-    Returns:
-        Dict: the dictionary of metrics (e.g., valid_f1)
-    """
-    table_path = "data"
-    k = hp.top_k
-
-    results = []
-
-    for dataset in ["train", "test"]:
-        ds_path = os.path.join(table_path, f"{dataset}.csv")
-        ds = pd.read_csv(ds_path)
-
-        def encode_tables(table_names, column_names):
-            tables = []
-            for table_name, col_name in zip(table_names, column_names):
-                table = pd.read_csv(
-                    os.path.join(table_path, f"tables/{table_name}.csv")
-                )
-                if model.hp.single_column:
-                    table = pd.DataFrame(table[col_name])
-                    # Guarantee that the table has 15 rows
-                    if len(table) > 15:
-                        unique_rows = table.drop_duplicates()
-                        num_unique_rows = len(unique_rows)
-                        if num_unique_rows <= 15:
-                            needed_rows = 15 - num_unique_rows
-                            additional_rows = table[
-                                ~table.index.isin(unique_rows.index)
-                            ].sample(n=needed_rows, replace=True, random_state=1)
-                            table = pd.concat([unique_rows, additional_rows])
-                        else:
-                            table = unique_rows.sample(n=15, random_state=1)
-                    # -------------------------------------
-                tables.append(table)
-            vectors = inference_on_tables(tables, model, unlabeled, batch_size=128)
-
-            assert all(
-                len(vec) == len(table.columns) for vec, table in zip(vectors, tables)
-            )
-
-            res = []
-            for vec, cid in zip(vectors, column_names):
-                if isinstance(cid, str):  # for ARPA test
-                    res.append(vec[-1])
-                elif cid < len(vec):
-                    res.append(vec[cid])
-                else:
-                    res.append(vec[-1])
-            return res
-
-        l_features = encode_tables(ds["l_table_id"], ds["l_column_id"])
-        r_features = encode_tables(ds["r_table_id"], ds["r_column_id"])
-
-        if dataset == "train":
-            gdc_ds = ds
-            all_r_features = r_features
-            gt_column_ids = ds["r_column_id"]
-        else:
-            gdc_ds = pd.read_csv(os.path.join(table_path, "train.csv"))
-            all_r_features = encode_tables(gdc_ds["l_table_id"], gdc_ds["l_column_id"])
-            gt_column_ids = gdc_ds["l_column_id"]
-
-        precision, top_k_results = evaluate_schema_matching(
-            l_features,
-            r_features,
-            all_r_features,
-            k,
-            ds["l_column_id"],
-            ds["r_column_id"],
-            gt_column_ids,
-            ds["l_table_id"],
-        )
-
-        if dataset == "test" and best_precision < precision:
-            results.extend(top_k_results)
-
-            if hp.gpt:
-                results_path = f"top_{k}_results.json"
-            else:
-                results_path = f"top_{k}_starmie_results.json"
-
-            with open(results_path, "w") as file:
-                json.dump(results, file, indent=4)
-
-            if hp.save_model:
-                embeddings_directory = "../../gdc_embeddings"
-                os.makedirs(embeddings_directory, exist_ok=True)
-                for i, embedding in enumerate(r_features):
-                    np.save(os.path.join(embeddings_directory, f"{i}.npy"), embedding)
-
-        print("%s precision at %d: %f" % (dataset, k, precision))
-
-    return precision
-
-
-def evaluate_schema_matching(
-    l_features,
-    r_features,
-    all_r_features,
-    k,
-    l_column_ids,
-    r_column_ids,
-    gt_column_ids,
-    l_table_ids,
-):
-    cosine_sim = cosine_similarity(l_features, all_r_features)
-
-    tp_count = 0
-    total_queries = len(l_features)
-    top_k_results = []
-
-    for index, similarities in enumerate(cosine_sim):
-        top_k_indices = np.argsort(similarities)[::-1][:k]
-        top_k_column_names = [gt_column_ids[i] for i in top_k_indices]
-
-        # Append results in JSON format
-        result = {
-            "Table name": l_table_ids[index],
-            "Candidate column": l_column_ids[index],
-            "Ground truth column": r_column_ids[index],
-            "Top k columns": top_k_column_names,
-        }
-        top_k_results.append(result)
-
-        # if index in top_k_indices:
-        #     tp_count += 1
-        if r_column_ids[index] in top_k_column_names:
-            tp_count += 1
-
-    precision = tp_count / total_queries
-    return precision, top_k_results

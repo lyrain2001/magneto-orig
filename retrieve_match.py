@@ -9,15 +9,13 @@ from matcher import ColumnMatcher
 from utils import get_dataset_paths, process_tables, get_samples, default_converter
 from evaluation import evaluate_matches, convert_to_valentine_format
 
-API_KEY = "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"
-
 
 class RetrieveMatch:
-    def __init__(self, model_type, dataset, serialization):
+    def __init__(self, model_type, dataset, serialization, llm_model):
         self.retriever = ColumnRetriever(
             model_type=model_type, dataset=dataset, serialization=serialization
         )
-        self.matcher = ColumnMatcher(api_key=API_KEY)
+        self.matcher = ColumnMatcher(llm_model=llm_model)
 
     def match(self, source_tables_path, target_tables_path, source_path, top_k, cand_k):
         source_table = pd.read_csv(os.path.join(source_tables_path, source_path))
@@ -35,7 +33,7 @@ class RetrieveMatch:
         matched_columns = self.retriever.find_matches(
             source_table, target_table, source_values, target_values, top_k
         )
-        print("Matched Columns:", matched_columns)
+        # print("Matched Columns:", matched_columns)
 
         if cand_k > 1:
             matched_columns = self.matcher.rematch(
@@ -60,9 +58,17 @@ class RetrieveMatch:
 
 def run_retrieve_match(args):
     source_tables_path, target_tables_path, gt_path = get_dataset_paths(args.dataset)
-    rema = RetrieveMatch(args.model_type, args.dataset, args.serialization)
+    rema = RetrieveMatch(
+        args.model_type, args.dataset, args.serialization, args.llm_model
+    )
 
-    target_dir = f"{args.dataset}/{args.model_type}_{args.serialization}_{args.top_k}_{args.cand_k}"
+    params = (
+        f"{args.model_type}_{args.serialization}_{args.top_k}_{args.cand_k}_{args.llm_model}"
+        if args.cand_k > 1 and args.llm_model != "gpt-4-turbo-preview"
+        else f"{args.model_type}_{args.serialization}_{args.top_k}_{args.cand_k}"
+    )
+    target_dir = f"{args.dataset}/{params}"
+
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
 
@@ -88,6 +94,11 @@ def run_retrieve_match(args):
     if args.dataset not in ["gdc"]:
         results = []
         for source_path in os.listdir(source_tables_path):
+            matches_filename = f"{target_dir}/{source_path.split('.')[0]}_matches.json"
+
+            if os.path.exists(matches_filename):
+                continue
+
             matches, runtime, orig_matches = rema.match(
                 source_tables_path,
                 target_tables_path,
@@ -103,7 +114,7 @@ def run_retrieve_match(args):
             print("Ground Truth:", ground_truth)
             metrics = evaluate_matches(matches, ground_truth)
             print("Metrics:", metrics)
-            exit()
+            # exit()
 
             metrics.update(
                 {
@@ -116,18 +127,38 @@ def run_retrieve_match(args):
 
             results.append(metrics)
 
-            matches_filename = f"{target_dir}/{source_path.split('.')[0]}_matches.json"
             with open(matches_filename, "w") as f:
                 json.dump(orig_matches, f, indent=4, default=default_converter)
 
         all_metrics = pd.DataFrame(results, columns=columns, index=None)
-        avg_metrics = all_metrics.mean(numeric_only=True)
-        print("Average Metrics:", avg_metrics)
 
         mertics_filename = f"{target_dir}/metrics.csv"
-        all_metrics.to_csv(mertics_filename, index=False)
+        if os.path.exists(mertics_filename):
+            all_metrics_df = pd.read_csv(mertics_filename)
+            all_metrics = pd.concat([all_metrics_df, all_metrics], ignore_index=True)
+            all_metrics.to_csv(mertics_filename, index=False)
+        else:
+            all_metrics.to_csv(mertics_filename, index=False)
+
+        avg_metrics = all_metrics.mean(numeric_only=True)
+        print("Average Metrics:", avg_metrics)
         avg_metrics_filename = f"{target_dir}/avg_metrics.csv"
-        avg_metrics.to_frame().T.to_csv(avg_metrics_filename, mode="a", index=False)
+        avg_metrics_df = avg_metrics.to_frame().T
+        avg_metrics_df.to_csv(avg_metrics_filename, mode="a", index=False)
+
+        data, usecase = args.dataset.split("-")
+        avg_metrics_df.insert(0, "usecase", usecase)
+        all_avg_metrics_filename = f"{data}-all/{params}.csv"
+        if os.path.exists(all_avg_metrics_filename):
+            all_avg_metrics_df = pd.read_csv(all_avg_metrics_filename)
+            all_avg_metrics_df = pd.concat(
+                [all_avg_metrics_df, avg_metrics_df], ignore_index=True
+            )
+            all_avg_metrics_df.to_csv(all_avg_metrics_filename, index=False)
+        else:
+            if not os.path.exists(f"{data}-all"):
+                os.makedirs(f"{data}-all")
+            avg_metrics_df.to_csv(all_avg_metrics_filename, index=False)
 
 
 def main():
@@ -153,10 +184,12 @@ def main():
         "--top_k", type=int, default=20, help="Number of top matches to return"
     )
     parser.add_argument(
-        "--cand_k",
-        type=int,
-        default=1,
-        help="Number of candidate matches to refine",
+        "--cand_k", type=int, default=20, help="Number of candidate matches to refine",
+    )
+    parser.add_argument(
+        "--llm_model",
+        default="gpt-4-turbo-preview",
+        help="Type of LLM-based matcher (gpt-4-turbo-preview or gemma2:9b)",
     )
 
     args = parser.parse_args()

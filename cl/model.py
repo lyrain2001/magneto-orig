@@ -1,56 +1,14 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from transformers import AutoModel, AutoTokenizer
+import os
+import sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from utils import infer_column_dtype, lm_map
 
 lm_mp = {"roberta": "roberta-base", "distilbert": "distilbert-base-uncased"}
-
-
-class TableModel(nn.Module):
-    """A baseline model for Table/Column matching"""
-
-    def __init__(self, device="cuda", lm="roberta"):
-        super().__init__()
-        self.bert = AutoModel.from_pretrained(lm_mp[lm])
-        self.device = device
-        hidden_size = 768
-        self.fc = torch.nn.Linear(hidden_size, 2)
-        # self.fc = torch.nn.Linear(hidden_size, 1)
-        # self.cosine = nn.CosineSimilarity()
-        # self.distance = nn.PairwiseDistance()
-
-    def forward(self, x):
-        """Encode the left, right, and the concatenation of left+right.
-
-        Args:
-            x (LongTensor): a batch of ID's of the left+right
-
-        Returns:
-            Tensor: binary prediction
-        """
-        x = x.to(self.device)  # (batch_size, seq_len)
-
-        # left+right
-        enc_pair = self.bert(x)[0][:, 0, :]  # (batch_size, emb_size)
-
-        batch_size = len(x)
-        # left and right
-        enc = self.bert(x)[0][:, 0, :]
-
-        # enc = self.bert(torch.cat((x1, x2)))[0][:, 0, :]
-        # enc1 = enc[:batch_size] # (batch_size, emb_size)
-        # enc2 = enc[batch_size:] # (batch_size, emb_size)
-
-        # fully connected
-        return self.fc(enc)
-
-
-def off_diagonal(x):
-    """Return a flattened view of the off-diagonal elements of a square matrix."""
-    n, m = x.shape
-    assert n == m
-    return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
 
 
 class BarlowTwinsSimCLR(nn.Module):
@@ -201,20 +159,3 @@ class BarlowTwinsSimCLR(nn.Module):
                 off_diag = (off_diagonal(c) ** 2).sum() * self.hp.scale_loss
                 loss = on_diag + self.hp.lambd * off_diag
                 return loss
-        elif mode == "finetune":
-            pass
-            # TODO
-            # x1 = x1.to(self.device) # (batch_size, seq_len)
-            # x2 = x2.to(self.device) # (batch_size, seq_len)
-            # x12 = x12.to(self.device) # (batch_size, seq_len)
-            # # left+right
-            # enc_pair = self.projector(self.bert(x12)[0][:, 0, :]) # (batch_size, emb_size)
-            # batch_size = len(x1)
-
-            # # left and right
-            # enc = self.projector(self.bert(torch.cat((x1, x2)))[0][:, 0, :])
-            # #enc = self.bert(torch.cat((x1, x2)))[0][:, 0, :]
-            # enc1 = enc[:batch_size] # (batch_size, emb_size)
-            # enc2 = enc[batch_size:] # (batch_size, emb_size)
-
-            # return self.fc(torch.cat((enc_pair, (enc1 - enc2).abs()), dim=1))

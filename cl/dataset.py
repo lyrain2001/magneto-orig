@@ -1,208 +1,98 @@
-from argparse import Namespace
 import torch
 import random
 import pandas as pd
 import os
+import sys
+import json
 
 from torch.utils import data
 from transformers import AutoTokenizer
 from typing import List
+
 from augment import augment
 from preprocessor import computeTfIdf, tfidfRowSample, preprocess
 
-# map lm name to huggingface's pre-trained model names
-lm_mp = {
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from utils import infer_column_dtype
+
+
+lm_map = {
     "roberta": "roberta-base",
+    "mpnet": "microsoft/mpnet-base",
 }
-
-# class TableDataset(data.Dataset):
-#     """Table dataset"""
-
-#     def __init__(self,
-#                  path,
-#                  max_len=256,
-#                  lm='roberta'):
-#         self.tokenizer = AutoTokenizer.from_pretrained(lm_mp[lm])
-#         self.pairs = []
-#         self.max_len = max_len
-#         self.samples = pd.read_csv(path)
-#         self.labels = self.samples['match']
-#         self.table_path = os.path.join(os.path.split(path)[0], "tables")
-#         self.table_cache = {}
-
-#     def _read_table(self, table_id):
-#         """Read a table"""
-#         if table_id in self.table_cache:
-#             table = self.table_cache[table_id]
-#         else:
-#             table = pd.read_csv(os.path.join(self.table_path,
-#                                              "table_%d.csv" % table_id))
-#             self.table_cache[table_id] = table
-
-#         return table
-
-
-#     def __len__(self):
-#         """Return the size of the dataset."""
-#         return len(self.samples)
-
-#     def __getitem__(self, idx):
-#         """Return a tokenized item of the dataset.
-
-#         Args:
-#             idx (int): the index of the item
-
-#         Returns:
-#             List of int: token ID's of the two entities combined
-#             int: the label of the pair (0: unmatch, 1: match)
-#         """
-#         # idx = random.randint(0, len(self.pairs)-1)
-#         l_table_id = self.samples['l_table_id'][idx]
-#         r_table_id = self.samples['r_table_id'][idx]
-#         l_column_id = self.samples['l_column_id'][idx]
-#         r_column_id = self.samples['r_column_id'][idx]
-
-#         l_table = self._read_table(l_table_id)
-#         r_table = self._read_table(r_table_id)
-
-#         l_column = l_table[l_table.columns[l_column_id]].astype(str)
-#         r_column = r_table[r_table.columns[r_column_id]].astype(str)
-
-#         # baseline: simple concatenation
-#         left = ' '.join(l_column)
-#         right = ' '.join(r_column)
-
-#         x = self.tokenizer.encode(text=left,
-#                                     text_pair=right,
-#                                     max_length=self.max_len,
-#                                     truncation=True)
-#         return x, self.labels[idx]
-
-
-#     def pad(self, batch):
-#         """Merge a list of dataset items into a train/test batch
-
-#         Args:
-#             batch (list of tuple): a list of dataset items
-
-#         Returns:
-#             LongTensor: x1 of shape (batch_size, seq_len)
-#             LongTensor: x2 of shape (batch_size, seq_len).
-#                         Elements of x1 and x2 are padded to the same length
-#             LongTensor: x12 of shape (batch_size, seq_len').
-#                         Elements of x12 are padded to the same length
-#             LongTensor: a batch of labels, (batch_size,)
-#         """
-#         if len(batch[0]) == 4:
-#             # em
-#             x1, x2, x12, y = zip(*batch)
-
-#             maxlen = max([len(x) for x in x1+x2])
-
-#             x1 = [xi + [self.tokenizer.pad_token_id]*(maxlen - len(xi)) for xi in x1]
-#             x2 = [xi + [self.tokenizer.pad_token_id]*(maxlen - len(xi)) for xi in x2]
-
-#             maxlen = max([len(x) for x in x12])
-#             x12 = [xi + [self.tokenizer.pad_token_id]*(maxlen - len(xi)) for xi in x12]
-
-#             return torch.LongTensor(x1), \
-#                    torch.LongTensor(x2), \
-#                    torch.LongTensor(x12), \
-#                    torch.LongTensor(y)
-#         else:
-#             # cleaning
-#             x1, y = zip(*batch)
-#             maxlen = max([len(x) for x in x1])
-#             x1 = [xi + [self.tokenizer.pad_token_id]*(maxlen - len(xi)) for xi in x1]
-#             return torch.LongTensor(x1), torch.LongTensor(y)
 
 
 class PretrainTableDataset(data.Dataset):
     """Table dataset for pre-training"""
 
     def __init__(
-        self,
-        path,
-        augment_op,
-        max_len=256,
-        size=None,
-        lm="roberta",
-        single_column=False,
-        sample_meth="wordProb",
-        table_order="column",
-        gpt=False,
+        self, hp,
     ):
-        self.tokenizer = AutoTokenizer.from_pretrained(lm_mp[lm])
-        self.max_len = max_len
-        self.path = path
-        self.gpt = gpt
-
-        # ----------------------------- Only one training table for ARPA ---------------------------------
-        if path == "data/tables":
-            self.tables = []
-            table = pd.read_csv(os.path.join(path, "gdc_table.csv"))
-            for col in table.columns:
-                self.tables.append(pd.DataFrame(table[col]))
-        else:
-            self.tables = [fn for fn in os.listdir(path) if ".csv" in fn]
-
-        # only keep the first n tables
-        if size is not None:
-            self.tables = self.tables[:size]
-
-        self.table_cache = {}
-
-        # augmentation operators
-        self.augment_op = augment_op
-
-        # logging counter
-        self.log_cnt = 0
-
-        # sampling method
-        self.sample_meth = sample_meth
-
-        # single-column mode
-        self.single_column = single_column
-
-        # row or column order for preprocessing
-        self.table_order = table_order
-
-        # tokenizer cache
+        self.tokenizer = AutoTokenizer.from_pretrained(lm_map[hp.lm])
+        self.max_len = hp.max_len
+        self.unique_columns, self.matches = self._load_json_file(hp)
+        self.augment_op = hp.augment_op
         self.tokenizer_cache = {}
 
-    @staticmethod
-    def from_hp(path: str, hp: Namespace):
-        """Construct a PretrainTableDataset from hyperparameters
+    def _load_json_file(self, hp):
+        unique_columns_path = f"train_data/{hp.dataset}_unique_columns.json"
+        if not os.path.exists(unique_columns_path):
+            print(f"File {unique_columns_path} does not exist")
+            exit()
+        with open(unique_columns_path, "r") as file:
+            unique_columns = json.load(file)
 
-        Args:
-            path (str): the path to the table directory
-            hp (Namespace): the hyperparameters
+        matches_path = f"train_data/{hp.dataset}_synthetic_matches.json"
+        if not os.path.exists(matches_path):
+            print(f"File {matches_path} does not exist")
+            exit()
+        with open(matches_path, "r") as file:
+            matches = json.load(file)
 
-        Returns:
-            PretrainTableDataset: the constructed dataset
-        """
-        return PretrainTableDataset(
-            path,
-            augment_op=hp.augment_op,
-            lm=hp.lm,
-            max_len=hp.max_len,
-            size=hp.size,
-            single_column=hp.single_column,
-            sample_meth=hp.sample_meth,
-            table_order=hp.table_order,
-            gpt=hp.gpt,
-        )
+        return unique_columns, matches
 
-    def _read_table(self, table_id):
-        """Read a table"""
-        if table_id in self.table_cache:
-            table = self.table_cache[table_id]
-        else:
-            fn = os.path.join(self.path, self.tables[table_id])
-            table = pd.read_csv(fn, lineterminator="\n")
-            self.table_cache[table_id] = table
+    def _tokenize(self, header, values, tokens):
+        if self.serialization == "header":
+            return header
 
-        return table
+        data_type = infer_column_dtype(values)
+
+        if self.serialization == "header_values_default":
+            text = (
+                self._tokenizer.cls_token
+                + header
+                + self._tokenizer.sep_token
+                + data_type
+                + self._tokenizer.sep_token
+                + self._tokenizer.sep_token.join(tokens)
+            )
+
+        elif self.serialization == "header_values_prefix":
+            text = (
+                self._tokenizer.cls_token
+                + "header:"
+                + header
+                + self._tokenizer.sep_token
+                + " datatype:"
+                + data_type
+                + self._tokenizer.sep_token
+                + " values:"
+                + ", ".join(tokens)
+            )
+
+        elif self.serialization == "header_values_repeat":
+            text = (
+                self._tokenizer.cls_token
+                + self._tokenizer.sep_token.join([header] * 5)
+                + self._tokenizer.sep_token
+                + data_type
+                + self._tokenizer.sep_token
+                + self._tokenizer.sep_token.join(tokens)
+            )
+
+        return text
+
+    # --------------------------- old code --------------------------------
 
     def _tokenize(self, table: pd.DataFrame) -> List[int]:
         """Tokenize a DataFrame table
