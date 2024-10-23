@@ -10,6 +10,7 @@ class ColumnMatcher:
         self.llm_model = llm_model
         self.client = self._load_client()
 
+    # TODO: Add any additional models here
     def _load_client(self):
         if self.llm_model in ["gpt-4-turbo-preview", "gpt-4o-mini"]:
             print("Loading OpenAI client")
@@ -56,8 +57,11 @@ class ColumnMatcher:
                 [col for col in source_table.columns if col != source_col]
             )
             if score_based:
-                refined_match = self._get_matches_w_score(cand, targets, other_cols)
-                refined_match = self._parse_scored_matches(refined_match)
+                while True:
+                    refined_match = self._get_matches_w_score(cand, targets, other_cols)
+                    refined_match = self._parse_scored_matches(refined_match)
+                    if refined_match is not None:
+                        break
             else:
                 refined_match = self._get_matches(cand, targets, top_k)
                 refined_match = refined_match.split("; ")
@@ -132,7 +136,12 @@ Candidate Column:"
         entries = refined_match.split("; ")
 
         for entry in entries:
-            schema_part, score_part = entry.rsplit("(", 1)
+            try:
+                schema_part, score_part = entry.rsplit("(", 1)
+            except ValueError:
+                print(f"Error parsing entry: {entry}")
+                return None
+
             try:
                 score = float(score_part[:-1])
             except ValueError:
@@ -148,7 +157,8 @@ Candidate Column:"
                         score = float(match.group())
                     else:
                         print("The string does not contain a valid two decimal float.")
-                        score = None
+                        return None
+
             schema_name = schema_part.strip()
             matched_columns.append((schema_name, score))
 
