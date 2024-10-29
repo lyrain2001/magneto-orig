@@ -15,7 +15,7 @@ class ColumnMatcher:
         if self.llm_model in ["gpt-4-turbo-preview", "gpt-4o-mini"]:
             print("Loading OpenAI client")
             return OpenAI(api_key=API_KEY)
-        elif self.llm_model in ["gemma2:9b"]:
+        elif self.llm_model in ["gemma2:9b", "llama3.1:8b-instruct-fp16"]:
             print("Loading OLLAMA client")
             return ollama.Client(host=OLLAMA_HOST)
 
@@ -62,6 +62,7 @@ class ColumnMatcher:
                     refined_match = self._parse_scored_matches(refined_match)
                     if refined_match is not None:
                         break
+                    print("Retrying...")
             else:
                 refined_match = self._get_matches(cand, targets, top_k)
                 refined_match = refined_match.split("; ")
@@ -117,7 +118,7 @@ Candidate Column:"
             )
             matches = response.choices[0].message.content
 
-        elif self.llm_model in ["gemma2:9b"]:
+        elif self.llm_model in ["gemma2:9b", "llama3.1:8b-instruct-fp16"]:
             response = self.client.chat(
                 model=self.llm_model,
                 messages=[
