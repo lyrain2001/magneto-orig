@@ -21,7 +21,7 @@ class SemanticGenerator:
 generate three alternative column names that adhere to typical database naming conventions such as underscores and abbreviations. \
 Additionally, provide distinct, technically correct synonyms or variants for the listed values \
 For columns with numerical or datetime data, generate random numbers or dates appropriate to the column's semantic meaning. \
-Ensuer that each set does not exceed 15 values. \
+Ensure that each set does not exceed 15 values. \
 Format your output as follows: \
 alternative_name_1, value1, value2, value3, ...; alternative_name_2, value1, value2, value3, ...; alternative_name_3, value1, value2, value3, ... \
 Ensure your response excludes additional information and quotations."
@@ -68,23 +68,36 @@ Ensure your response excludes additional information and quotations."
 
 
 class ExactGenerator:
-    def __init__(self, threshold=5):
+    def __init__(self, threshold=1):
         self.threshold = threshold
 
     def get_exact_matches(self, column_name, column_values):
         value_size = len(column_values)
+        # with probability(0.3) replace a random character in the column name with a random character or number or blank space
+        if random.random() < 0.3 or value_size < self.threshold:
+            alternative_column_name = list(column_name)
+            alternative_column_name[random.randint(0, len(alternative_column_name) - 1)] = random.choice(
+                "abcdefghijklmnopqrstuvwxyz0123456789 "
+            )
+            alternative_column_name = "".join(alternative_column_name)
+        else:
+            alternative_column_name = column_name
         if value_size < self.threshold:
-            return None
+            return {
+                f"{column_name}_1": [],
+                f"{alternative_column_name}_2": [],
+                # f"{column_name}_3": [],
+            }
         return {
             f"{column_name}_1": random.sample(
-                column_values, random.randint(1, value_size)
+                column_values, random.randint(1, min(value_size, 15))
             ),
-            f"{column_name}_2": random.sample(
-                column_values, random.randint(1, value_size)
+            f"{alternative_column_name}_2": random.sample(
+                column_values, random.randint(1, min(value_size, 15))
             ),
-            f"{column_name}_3": random.sample(
-                column_values, random.randint(1, value_size)
-            ),
+            # f"{column_name}_3": random.sample(
+            #     column_values, random.randint(1, value_size)
+            # ),
         }
 
 
@@ -102,17 +115,23 @@ def generate_matches(dataset, unique_columns):
         if column_name in matches:
             continue
 
-        matches[column_name] = {}
+        matches[column_name] = {"exact": {}, "semantic": {}, "original": {}}
+        
+        values = column_values if len(column_values) < 15 else random.sample(column_values, 15)
+        matches[column_name]["original"] = {column_name: values}
 
         exact_matches = exact_generator.get_exact_matches(column_name, column_values)
         if exact_matches:
-            matches[column_name].update(exact_matches)
+            matches[column_name]["exact"].update(exact_matches)
 
-        semantic_matches = semantic_generator.get_semantic_matches(
-            column_name, column_values
-        )
+        while True:
+            semantic_matches = semantic_generator.get_semantic_matches(
+                column_name, column_values
+            )
+            if len(semantic_matches) == 3:
+                break
         if semantic_matches:
-            matches[column_name].update(semantic_matches)
+            matches[column_name]["semantic"].update(semantic_matches)
 
         with open(file_path, "w") as file:
             json.dump(matches, file, indent=4)
@@ -124,7 +143,7 @@ def main():
     )
     parser.add_argument(
         "--dataset",
-        default="chembl",
+        default="gdc",
         help="Name of the dataset",
     )
     args = parser.parse_args()

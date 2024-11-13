@@ -30,9 +30,8 @@ class ColumnMatcher:
         target_table,
         source_values,
         target_values,
-        top_k,
-        matched_columns,
         cand_k,
+        matched_columns,
         score_based=True,
     ):
         refined_matches = {}
@@ -50,12 +49,29 @@ class ColumnMatcher:
                 + ", Sample values: ["
                 + ",".join(target_values[target_col])
                 + "]"
-                for target_col, _ in target_col_scores
+                for target_col, _ in target_col_scores[:cand_k]
+            ]
+            unselected_cols = [
+                target_col
+                for target_col, _ in target_col_scores[cand_k:]
             ]
             targets = "\n".join(target_cols)
             other_cols = ",".join(
                 [col for col in source_table.columns if col != source_col]
             )
+<<<<<<< HEAD
+            # print(unselected_cols)
+            # if score_based:
+            while True:
+                refined_match = self._get_matches_w_score(cand, targets, other_cols)
+                refined_match = self._parse_scored_matches(refined_match)
+                if refined_match is not None:
+                    break
+                print("Retrying...")
+            # else:
+            #     refined_match = self._get_matches(cand, targets, top_k)
+            #     refined_match = refined_match.split("; ")
+=======
             if score_based:
                 while True:
                     refined_match = self._get_matches_w_score(cand, targets, other_cols)
@@ -66,7 +82,13 @@ class ColumnMatcher:
             else:
                 refined_match = self._get_matches(cand, targets, top_k)
                 refined_match = refined_match.split("; ")
+>>>>>>> 39e982634f4b4a5347b4a10ba5c3356657e9ed27
             refined_matches[source_col] = refined_match
+            # add unselected columns to the refined_matches with a score of 0
+            for unselected_col in unselected_cols:
+                refined_matches[source_col].append((unselected_col, 0.00))
+            # print(refined_matches)
+            # exit()
         return refined_matches
 
     def _get_prompt(self, cand, targets):

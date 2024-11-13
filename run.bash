@@ -12,11 +12,9 @@
 #SBATCH --mail-user=yl6624@nyu.edu
 #SBATCH --account=pr_136_tandon_advanced
 
-# model_types=("arctic-zs" "roberta-zs" "mpnet-zs")
-model_types=("roberta-zs" "mpnet-zs")
+model_types=("arctic-zs" "roberta-zs" "mpnet-zs")
 serializations=("header_values_default" "header_values_prefix")
-# usecases=("joinable" "semjoinable" "unionable" "viewunion")
-usecases=("joinable")
+usecases=("joinable" "semjoinable" "unionable" "viewunion")
 llm_model="gpt-4o-mini"
 
 for usecase in "${usecases[@]}"; do
