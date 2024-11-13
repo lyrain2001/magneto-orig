@@ -4,7 +4,7 @@ import torch
 from torch.nn.functional import normalize
 from sentence_transformers import SentenceTransformer
 
-from utils import (
+from rema_utils import (
     lm_map,
     sentence_transformer_map,
     detect_column_type,
