@@ -15,13 +15,9 @@ QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 
 
 class ColumnRetriever:
-<<<<<<< HEAD
     def __init__(
         self, model_type, dataset, serialization, augmentation, norm=False, batch_size=64, margin=1
     ):
-=======
-    def __init__(self, model_type, dataset, serialization, norm=True):
->>>>>>> 39e982634f4b4a5347b4a10ba5c3356657e9ed27
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.serialization = serialization
         self.augmentation = augmentation
@@ -123,13 +119,9 @@ class ColumnRetriever:
                 similarities.items(), key=lambda x: x[1], reverse=True
             )[:top_k]
             if self.norm:
-<<<<<<< HEAD
                 normalized_similarities = self._normalize_similarities(
                     sorted_similarities
                 )
-=======
-                normalized_similarities = self._normalize_similarities(sorted_similarities)
->>>>>>> 39e982634f4b4a5347b4a10ba5c3356657e9ed27
                 matched_columns[s_col] = normalized_similarities
             else:
                 matched_columns[s_col] = sorted_similarities
@@ -206,18 +198,10 @@ class ColumnRetriever:
             doc_score_pairs_sorted = sorted(
                 doc_score_pairs, key=lambda x: x[1], reverse=True
             )[:top_k]
-<<<<<<< HEAD
             # if self.norm:
             #     normalized_scores = self._normalize_similarities(doc_score_pairs_sorted)
             #     matched_columns[col] = normalized_scores
             # else:
             matched_columns[col] = doc_score_pairs_sorted
-=======
-            if self.norm:
-                normalized_scores = self._normalize_similarities(doc_score_pairs_sorted)
-                matched_columns[col] = normalized_scores
-            else:
-                matched_columns[col] = doc_score_pairs_sorted
->>>>>>> 39e982634f4b4a5347b4a10ba5c3356657e9ed27
 
         return matched_columns

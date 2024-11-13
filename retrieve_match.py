@@ -12,7 +12,6 @@ from evaluation import evaluate_matches, convert_to_valentine_format
 
 
 class RetrieveMatch:
-<<<<<<< HEAD
     def __init__(
         self, model_type, dataset, serialization, augmentation, llm_model, norm, batch_size, margin
     ):
@@ -43,15 +42,6 @@ class RetrieveMatch:
         return normalized_columns
 
     def _identify_low_confidence_sources(self, matched_columns, threshold=75):
-=======
-    def __init__(self, model_type, dataset, serialization, llm_model, norm):
-        self.retriever = ColumnRetriever(
-            model_type=model_type, dataset=dataset, serialization=serialization, norm=norm
-        )
-        self.matcher = ColumnMatcher(llm_model=llm_model)
-
-    def identify_low_confidence_sources(self, matched_columns):
->>>>>>> 39e982634f4b4a5347b4a10ba5c3356657e9ed27
         variances = []
 
         for s_col, matches in matched_columns.items():
@@ -62,11 +52,7 @@ class RetrieveMatch:
         # Calculate thresholds based on variances
         if variances:
             variance_threshold = np.percentile(
-<<<<<<< HEAD
                 variances, threshold
-=======
-                variances, 75
->>>>>>> 39e982634f4b4a5347b4a10ba5c3356657e9ed27
             )  # Upper 75th percentile for variance
 
             unconf_matched_columns = {}
@@ -110,11 +96,7 @@ class RetrieveMatch:
 
         if cand_k > 1:
             columns_to_refine, matched_columns = (
-<<<<<<< HEAD
                 self._identify_low_confidence_sources(matched_columns)
-=======
-                self.identify_low_confidence_sources(matched_columns)
->>>>>>> 39e982634f4b4a5347b4a10ba5c3356657e9ed27
                 if conf_prune
                 else (matched_columns, {})
             )
@@ -126,7 +108,6 @@ class RetrieveMatch:
                     target_table,
                     source_values,
                     target_values,
-<<<<<<< HEAD
                     cand_k,
                     columns_to_refine,
                 )
@@ -135,14 +116,6 @@ class RetrieveMatch:
         # print("Matched Columns:", matched_columns)
         # normzlized_matches = self._min_max_normalize(matched_columns)
         # print("Normalized Matches:", normzlized_matches)
-=======
-                    top_k,
-                    columns_to_refine,
-                    cand_k,
-                )
-                print("Refined Matches:", refined_columns)
-                matched_columns.update(refined_columns)
->>>>>>> 39e982634f4b4a5347b4a10ba5c3356657e9ed27
         runtime = time.time() - start_time
 
         converted_matches = convert_to_valentine_format(
@@ -155,7 +128,6 @@ class RetrieveMatch:
 
 def run_retrieve_match(args):
     source_tables_path, target_tables_path, gt_path = get_dataset_paths(args.dataset)
-<<<<<<< HEAD
     print("Source Tables Path:", source_tables_path)
     print("Target Tables Path:", target_tables_path)
     if args.disable_norm:
@@ -175,15 +147,6 @@ def run_retrieve_match(args):
     )
 
     params = f"{args.model_type}_{args.serialization}_{args.top_k}_{args.cand_k}_{args.margin}"
-=======
-    norm = True if args.cand_k == 1 or args.conf_prune else False
-    print("Normalization: ", norm)
-    rema = RetrieveMatch(
-        args.model_type, args.dataset, args.serialization, args.llm_model, norm
-    )
-
-    params = f"{args.model_type}_{args.serialization}_{args.top_k}_{args.cand_k}"
->>>>>>> 39e982634f4b4a5347b4a10ba5c3356657e9ed27
     if args.cand_k > 1:
         params += f"_{args.llm_model}"
     if args.conf_prune:
@@ -221,7 +184,6 @@ def run_retrieve_match(args):
         # if os.path.exists(matches_filename):
         #     continue
 
-<<<<<<< HEAD
         matches, runtime, orig_matches = rema.match(
             source_tables_path, target_tables_path, source_path, args
         )
@@ -237,15 +199,6 @@ def run_retrieve_match(args):
         metrics = evaluate_matches(matches, ground_truth)
         print("Metrics:", metrics)
         # exit()
-=======
-            matches, runtime, orig_matches = rema.match(
-                source_tables_path, target_tables_path, source_path, args
-            )
-            gt_rows = gt_df[gt_df["source_tab"] == source_path.split(".")[0]]
-            ground_truth = [
-                (row["source_col"], row["target_col"]) for _, row in gt_rows.iterrows()
-            ]
->>>>>>> 39e982634f4b4a5347b4a10ba5c3356657e9ed27
 
         metrics.update(
             {
@@ -331,7 +284,6 @@ def main():
         "--conf_prune",
         action="store_true",
         help="Only refine matches with low confidence",
-<<<<<<< HEAD
     )
     parser.add_argument(
         "--augmentation",
@@ -348,8 +300,6 @@ def main():
     )
     parser.add_argument(
         "--margin", type=float, default=0.5, help="Model training margin"
-=======
->>>>>>> 39e982634f4b4a5347b4a10ba5c3356657e9ed27
     )
 
     args = parser.parse_args()
