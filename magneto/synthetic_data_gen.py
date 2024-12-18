@@ -5,6 +5,7 @@ import random
 import os
 import sys
 import tqdm
+import pandas as pd
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from config import API_KEY
@@ -19,7 +20,7 @@ class SemanticGenerator:
         if len(column_values) > 0:
             prompt = f"Given the table column '{column_name}' with values {column_values}, \
 generate three alternative column names that adhere to typical database naming conventions such as underscores and abbreviations. \
-Additionally, provide distinct, technically correct synonyms or variants for the listed values \
+Additionally, provide distinct, technically correct synonyms, variants, or abbreviations for the listed values \
 For columns with numerical or datetime data, generate random numbers or dates appropriate to the column's semantic meaning. \
 Ensure that each set does not exceed 15 values. \
 Format your output as follows: \
@@ -43,7 +44,7 @@ Ensure your response excludes additional information and quotations."
         messages = [
             {
                 "role": "system",
-                "content": "You are an AI trained to perform schema matching by providing similarity scores.",
+                "content": "You are an AI trained for generating alternative table column names and appropriate value variants",
             },
             {
                 "role": "user",
@@ -76,9 +77,9 @@ class ExactGenerator:
         # with probability(0.3) replace a random character in the column name with a random character or number or blank space
         if random.random() < 0.3 or value_size < self.threshold:
             alternative_column_name = list(column_name)
-            alternative_column_name[random.randint(0, len(alternative_column_name) - 1)] = random.choice(
-                "abcdefghijklmnopqrstuvwxyz0123456789 "
-            )
+            alternative_column_name[
+                random.randint(0, len(alternative_column_name) - 1)
+            ] = random.choice("abcdefghijklmnopqrstuvwxyz0123456789 ")
             alternative_column_name = "".join(alternative_column_name)
         else:
             alternative_column_name = column_name
@@ -103,6 +104,7 @@ class ExactGenerator:
 
 def generate_matches(dataset, unique_columns):
     matches = {}
+    
     file_path = f"{dataset}_synthetic_matches.json"
     if os.path.exists(file_path):
         with open(file_path, "r") as file:
@@ -116,8 +118,12 @@ def generate_matches(dataset, unique_columns):
             continue
 
         matches[column_name] = {"exact": {}, "semantic": {}, "original": {}}
-        
-        values = column_values if len(column_values) < 15 else random.sample(column_values, 15)
+
+        values = (
+            column_values
+            if len(column_values) < 15
+            else random.sample(column_values, 15)
+        )
         matches[column_name]["original"] = {column_name: values}
 
         exact_matches = exact_generator.get_exact_matches(column_name, column_values)
@@ -148,13 +154,25 @@ def main():
     )
     args = parser.parse_args()
     dataset = args.dataset
-
-    try:
-        with open(f"{dataset}_unique_columns.json", "r") as f:
-            unique_columns = json.load(f)
-    except FileNotFoundError:
-        print(f"Error: {dataset}_unique_columns.json not found.")
-        exit()
+    
+    if dataset in ["gdc", "wikidata", "magellan"]:
+        try:
+            with open(f"{dataset}_unique_columns.json", "r") as f:
+                unique_columns = json.load(f)
+        except FileNotFoundError:
+            print(f"Error: {dataset}_unique_columns.json not found.")
+            exit()
+    else:
+        dataset_dict = {"chembl": "Chembl", "opendata": "Opendata-base", "tpc": "TPCH-base"}
+        file_path = f"model_generation_valentine/{dataset_dict[dataset]}.csv"
+        df = pd.read_csv(file_path)
+        unique_columns = {}
+        for column in df.columns:
+            # if > 15 unique values, sample 15
+            if len(df[column].unique()) > 15:
+                unique_columns[column] = random.sample(df[column].unique().tolist(), 15)
+            else:
+                unique_columns[column] = df[column].unique().tolist()
 
     generate_matches(dataset, unique_columns)
 

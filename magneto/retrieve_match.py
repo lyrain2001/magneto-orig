@@ -7,13 +7,21 @@ import json
 
 from retriever import ColumnRetriever
 from matcher import ColumnMatcher
-from utils import get_dataset_paths, process_tables, get_samples, default_converter
+from rema_utils import get_dataset_paths, process_tables, get_samples, default_converter
 from evaluation import evaluate_matches, convert_to_valentine_format
 
 
 class RetrieveMatch:
     def __init__(
-        self, model_type, dataset, serialization, augmentation, llm_model, norm, batch_size, margin
+        self,
+        model_type,
+        dataset,
+        serialization,
+        augmentation,
+        llm_model,
+        norm,
+        batch_size,
+        margin,
     ):
         self.retriever = ColumnRetriever(
             model_type=model_type,
@@ -79,7 +87,9 @@ class RetrieveMatch:
             target_path = os.listdir(target_tables_path)[0]
         else:
             target_path = source_path.replace("source", "target")
-        target_table = pd.read_csv(os.path.join(target_tables_path, target_path), low_memory=False)
+        target_table = pd.read_csv(
+            os.path.join(target_tables_path, target_path), low_memory=False
+        )
         source_table, target_table = process_tables(source_table, target_table)
 
         start_time = time.time()

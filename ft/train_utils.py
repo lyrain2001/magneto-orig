@@ -4,6 +4,7 @@ from torch import nn
 from torch.utils.data import Sampler
 from sentence_transformers import SentenceTransformer
 
+
 class BalancedBatchSampler(Sampler):
     def __init__(self, labels, batch_size, n_samples_per_class=2):
         self.labels = np.array(labels)

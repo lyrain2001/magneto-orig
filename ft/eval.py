@@ -1,5 +1,6 @@
 import torch
 
+
 def evaluate_top_k(model, validation_loader, device, k=1):
     model.eval()
     all_embeddings = []

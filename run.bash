@@ -21,7 +21,7 @@ for usecase in "${usecases[@]}"; do
     for model_type in "${model_types[@]}"; do
         for serialization in "${serializations[@]}"; do
             echo "Running model type: $model_type with serialization: $serialization for usecase: $usecase"
-            python rema-sm/retrieve_match.py \
+            python magneto-orig/magneto/retrieve_match.py \
                 --model_type "$model_type" \
                 --serialization "$serialization" \
                 --dataset "chembl-$usecase" \

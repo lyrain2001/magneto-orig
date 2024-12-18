@@ -63,7 +63,9 @@ class SimCLRLoss(nn.Module):
 
         # Compute the contrastive loss
         exp_sim = torch.exp(cosine_sim / self.temperature)
-        sum_exp_sim = exp_sim.sum(1, keepdim=True) - exp_sim.diag().unsqueeze(1)  # avoid self-contrast
+        sum_exp_sim = exp_sim.sum(1, keepdim=True) - exp_sim.diag().unsqueeze(
+            1
+        )  # avoid self-contrast
 
         positive_sim = exp_sim * mask
         sum_positive_sim = positive_sim.sum(1, keepdim=True)

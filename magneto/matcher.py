@@ -52,8 +52,7 @@ class ColumnMatcher:
                 for target_col, _ in target_col_scores[:cand_k]
             ]
             unselected_cols = [
-                target_col
-                for target_col, _ in target_col_scores[cand_k:]
+                target_col for target_col, _ in target_col_scores[cand_k:]
             ]
             targets = "\n".join(target_cols)
             other_cols = ",".join(
@@ -91,7 +90,7 @@ Target Schemas: \
 Column: WorkerID, Sample values: [100, 101, 102] \
 Column: EmpCode, Sample values: [001, 002, 003] \
 Column: StaffName, Sample values: ['Alice', 'Bob', 'Charlie']\n \
-Response: WorkerID(0.95); EmpCode(0.30); StaffNumber(0.05)\n\n \
+Response: WorkerID(0.95); EmpCode(0.30); StaffName(0.05)\n\n \
 Candidate Column:"
             + cand
             + "\n\nTarget Schemas:\n"

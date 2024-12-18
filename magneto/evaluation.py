@@ -23,7 +23,7 @@ def evaluate_matches(matches, ground_truth):
     all_metrics["MRR"] = mrr_score
     for metrix_name, score in one2one_metrics.items():
         all_metrics[f"one2one_{metrix_name}"] = score
-        
+
     all_metrics["RecallAtK"] = calculate_recall_at_k(matches, ground_truth)
 
     return all_metrics

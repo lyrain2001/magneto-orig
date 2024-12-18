@@ -16,7 +16,14 @@ QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 
 class ColumnRetriever:
     def __init__(
-        self, model_type, dataset, serialization, augmentation, norm=False, batch_size=64, margin=1
+        self,
+        model_type,
+        dataset,
+        serialization,
+        augmentation,
+        norm=False,
+        batch_size=64,
+        margin=1,
     ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.serialization = serialization
@@ -54,12 +61,6 @@ class ColumnRetriever:
             col: self._encode_column(col, table[col], values[col])
             for col in table.columns
         }
-
-    # def _encode_column(self, header, values, tokens):
-    #     text = self._tokenize(header, values, tokens)
-    #     inputs = self._tokenizer(text, return_tensors="pt").to(self.device)
-    #     outputs = self._model(**inputs)
-    #     return outputs.last_hidden_state[:, 0, :].detach().cpu().numpy()  # Move to CPU
 
     def encode_columns(self, table, values):
         texts = [self._tokenize(col, table[col], values[col]) for col in table.columns]

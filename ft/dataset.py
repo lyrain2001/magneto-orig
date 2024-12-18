@@ -4,9 +4,11 @@ from torch.utils.data import Dataset
 
 import os
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from rema_utils import detect_column_type, sentence_transformer_map, clean_element
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+
+from utils import detect_column_type, sentence_transformer_map, clean_element
+
 
 class CustomDataset(Dataset):
     def __init__(
